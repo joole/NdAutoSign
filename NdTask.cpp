@@ -26,7 +26,7 @@ bool NdTask::operator()(NdUserInfo& user)
 			break;
 		}
 
-		// »ñÈ¡UC Token
+		// Â»Ã±ÃˆÂ¡UC Token
 		std::string encPwd = NdCalculateUtil::MD5Encrypt(user.m_99upwd);
 		if (!t_RequestForUC(user.m_uname, encPwd, &token)) {
 			std::printf("[%s] Failed to Request UCToken.\n", user.m_uname.c_str());
@@ -77,16 +77,16 @@ bool NdTask::operator()(NdUserInfo& user)
 			
 		}
 		if (user.m_bSendFlower) {
-			bool send_ok = true;
+			//bool send_ok = true;
 			for (auto & recv : user.m_sendFlower)
 			{
 				bool retry = false;
 				bool result = false;
-				for (;;)
+				for (int sndIndex = 0; sndIndex < 4; sndIndex++)
 				{
 					result = t_SendFlower(&token, recv.m_recverId, recv.m_count, retry);
 					if (result == true) {
-						send_ok = true;
+						//send_ok = true;
 						break;
 					}
 					else if (result == false && retry == true) {
@@ -112,7 +112,7 @@ bool NdTask::operator()(NdUserInfo& user)
 				break;
 			}
 		}
-		// Õë¶ÔP6 ×ö³ö¸Ä±ä
+		// Ã•Ã«Â¶Ã”P6 Ã—Ã¶Â³Ã¶Â¸Ã„Â±Ã¤
 		if (user.m_bTaskClear) {
 			if (!t_DayTaskClear(&user))
 			{
@@ -127,7 +127,7 @@ bool NdTask::operator()(NdUserInfo& user)
 		}
 		
 		auto end = std::chrono::high_resolution_clock::now();
-		std::printf("[%s] Done Job Successfully!!!  using %lld ms.\n", user.m_uname.c_str(), std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
+		std::printf("[%s] Done Job Successfully!!!  using %ld ms.\n", user.m_uname.c_str(), std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
 		return true;
 		
 	} while (false);
@@ -179,6 +179,7 @@ bool NdTask::InitUsers(const char* config_path, std::vector<NdUserInfo> *pUsers)
 			singleUsr.m_sendFlower.clear();
 		}
 		if (singleUsr.m_bWriteDiary) {
+			/*
 			auto diary_contex						= user["diary"];
 			if (diary_contex == NULL) {
 
@@ -191,6 +192,7 @@ bool NdTask::InitUsers(const char* config_path, std::vector<NdUserInfo> *pUsers)
 			singleUsr.m_diaryDetail.m_groupName		= diary_contex["groupName"].asString();
 			singleUsr.m_diaryDetail.m_content		= diary_contex["content"].asString();
 			singleUsr.m_diaryDetail.m_completeRate	= diary_contex["compRate"].asString();
+			*/
 		}
 		pUsers->emplace_back(singleUsr);
 	}
@@ -371,7 +373,7 @@ bool NdTask::t_LoginIOA(NdUserInfo *pUserInfo)
 
 	std::string flag1   = "<input id=\"NdToken1\" name=\"NdToken1\" type=\"hidden\" value=\" ";
 
-	//1. ´¦Àícookie
+	//1. Â´Â¦Ã€Ã­cookie
 	std::vector<std::string> tmp = NdCalculateUtil::SplitString(headers, std::string("\r\n"));
 	for (unsigned int i = 0; i < tmp.size(); i++)
 	{
@@ -394,6 +396,9 @@ bool NdTask::t_LoginIOA(NdUserInfo *pUserInfo)
 	std::string NdToken1		= "";
 	std::string NdToken2		= "";
 	std::string moduluses		= "";
+	
+	// add viewstate parttent by 
+	std::string viewstate	    = "<input type=\"hidden\" name=\"__VIEWSTATE\" id=\"__VIEWSTATE\" value=\"";
 
 	std::size_t ndpos = content.find(ndTokenPattern1);
 	if (ndpos != std::string::npos) {
@@ -407,14 +412,19 @@ bool NdTask::t_LoginIOA(NdUserInfo *pUserInfo)
 	if (ndpos != std::string::npos) {
 		moduluses = content.substr(ndpos + rsaPattern.length(), 256);
 	}
+	
+	auto pos1 = content.find(viewstate);
+	auto pos2 = content.find("\"", pos1 + viewstate.length());
+	viewstate = content.substr(pos1 + viewstate.length(), pos2 - (pos1 + viewstate.length()));
+	viewstate = viewstate.replace(0, 1, "%2F");
 
 	pUserInfo->m_ioacookie += "uname=" + pUserInfo->m_uname;
 
-	// µÃµ½cookieºó£¬¶ÔÓÃ»§ÃûÃÜÂë½øÐÔ¼ÓÃÜ
+	// ÂµÃƒÂµÂ½cookieÂºÃ³Â£Â¬Â¶Ã”Ã“ÃƒÂ»Â§ÃƒÃ»ÃƒÃœÃ‚Ã«Â½Ã¸ÃÃ”Â¼Ã“ÃƒÃœ
 	std::string base64_pwd = NdCalculateUtil::Base64Encode(pUserInfo->m_ioapwd, false);
-	std::string rsa_pwd = NdCalculateUtil::RSAEncrypt(moduluses, "", base64_pwd);
+	std::string rsa_pwd    = NdCalculateUtil::RSAEncrypt(moduluses, "", base64_pwd);
 
-	std::string viewState = "__VIEWSTATE=%2FwEPDwUKMTY4MTIyNTIxMmRk&NdToken1=" + NdToken1 + "&NdToken2=" + NdToken2 + "&Password=" + rsa_pwd + "&Password2=&rsa=1&Username=" + pUserInfo->m_uname;
+	viewstate = "__VIEWSTATE=" + viewstate + "&NdToken1=" + NdToken1 + "&NdToken2=" + NdToken2 + "&Password=" + rsa_pwd + "&Password2=&Password2_copy=" + pUserInfo->m_ioapwd + "&rsa=1&Username=" + pUserInfo->m_uname;
 
 	http.SetRequestMethod(NdHttpClient::kPost);
 	http.SetRequestUrl("http://ioa.99.com/Default.aspx");
@@ -425,9 +435,11 @@ bool NdTask::t_LoginIOA(NdUserInfo *pUserInfo)
 	http.AddRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 	http.AddRequestHeader("Cookie", pUserInfo->m_ioacookie);
 	http.AddRequestHeader("Host", "ioa.99.com");
-	http.AddRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.10240");
+	http.AddRequestHeader("Referer", "http://ioa.99.com");
+	http.AddRequestHeader("Expect", "");
+	http.AddRequestHeader("User-Agent", "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 10.0; WOW64; Trident/7.0)");
 	http.AllowAutoRedirect(false);
-	http.SetPostFileds(viewState);
+	http.SetPostFileds(viewstate);
 	nCode = http.ExecRequest();
 	if (nCode != 0) {
 		return false;
@@ -437,6 +449,9 @@ bool NdTask::t_LoginIOA(NdUserInfo *pUserInfo)
 	std::size_t ndpos2 = headers.find("user_Info=");
 	if (ndpos2 != std::string::npos && ndpos != std::string::npos) {
 		std::string str_cookie = headers.substr(ndpos2, ndpos - ndpos2);
+		
+		ndpos =  str_cookie.find("; domain");
+		str_cookie = str_cookie.substr(0, ndpos);
 		pUserInfo->m_ioacookie += ";" + str_cookie;
 		return true;
 	}
@@ -471,7 +486,7 @@ bool NdTask::t_AutoSign(NdUserInfo *pUserInfo)
 	Json::Reader reader;
 	Json::Value  value;
 
-	// {"MsgKey":1,"MsgContent":"³É¹¦Ç©µ½£º»ñµÃ<font color='red'>200</font>¾­Ñé£¬<font color='red'>200</font>»ý·Ö£¬<font color='red'>5</font>¶äºìÃµ¹å"}
+	// {"MsgKey":1,"MsgContent":"Â³Ã‰Â¹Â¦Ã‡Â©ÂµÂ½Â£ÂºÂ»Ã±ÂµÃƒ<font color='red'>200</font>Â¾Â­Ã‘Ã©Â£Â¬<font color='red'>200</font>Â»Ã½Â·Ã–Â£Â¬<font color='red'>5</font>Â¶Ã¤ÂºÃ¬ÃƒÂµÂ¹Ã¥"}
 	if (!reader.parse(content, value)) {
 		std::printf("[%s][%d][%s]\n", __FUNCTION__, http.GetResponseCode(), content.c_str());
 		return false;
@@ -512,7 +527,7 @@ bool NdTask::t_DayTaskClear(NdUserInfo *pUserInfo)
 	Json::Reader reader;
 	Json::Value  value;
 
-	// {"MsgKey":"1" »¹Ã»ÓÐÇ©µ½ÄØ} {"MsgKey":"0" ÒÑ¾­Ç©µ½¹ýÁË}
+	// {"MsgKey":"1" Â»Â¹ÃƒÂ»Ã“ÃÃ‡Â©ÂµÂ½Ã„Ã˜} {"MsgKey":"0" Ã’Ã‘Â¾Â­Ã‡Â©ÂµÂ½Â¹Ã½ÃÃ‹}
 	if (!reader.parse(content, value)) {
 		std::printf("[%s][%d][%s]\n", __FUNCTION__, http.GetResponseCode(), content.c_str());
 		return false;
@@ -523,7 +538,7 @@ bool NdTask::t_DayTaskClear(NdUserInfo *pUserInfo)
 	NdCodeConvert  Convert("gb2312", "utf-8");
 	std::string cont = value["MsgContent"].asString();
 	char ccont[128] = {0};
-	int ccont_length = 0;
+	//int ccont_length = 0;
 	Convert.convert((char *)cont.c_str(), cont.size(), ccont, sizeof(ccont));
 	std::printf("[%s][%s][%d][%s]\n", pUserInfo->m_uname.c_str(), __FUNCTION__, http.GetResponseCode(), ccont);
 	return false;
@@ -644,7 +659,7 @@ bool NdTask::t_GetExtraPoint(NdUserInfo *pUserInfo, const std::vector<NdExtraPoi
 	NdHttpClient http;
 	std::string tmp = "";
 
-	std::printf("[%s] extra points [%d]\n", pUserInfo->m_uname.c_str(), infos.size());
+	std::printf("[%s] extra points [%lu]\n", pUserInfo->m_uname.c_str(), infos.size());
 	for (auto && item : infos)
 	{
 		http.ClearRequestState();
@@ -659,9 +674,8 @@ bool NdTask::t_GetExtraPoint(NdUserInfo *pUserInfo, const std::vector<NdExtraPoi
 		http.AddRequestHeader("Host", "ioa.99.com");
 		http.AddRequestHeader("Referer", "http://ioa.99.com/ERPDesk/Assist_Default.aspx");
 		http.AddRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.10240");
-		http.AddRequestHeader("Pragma", "no-cache");
 		http.AddRequestHeader("X-Requested-With", "XMLHttpRequest");
-		tmp = "code=" + item.m_code;
+		tmp = "code:" + item.m_code;
 		http.SetPostFileds(tmp);
 		int nCode = http.ExecRequest();
 		if (nCode != 0) {
@@ -687,7 +701,7 @@ bool NdTask::t_GetExtraPoint(NdUserInfo *pUserInfo, const std::vector<NdExtraPoi
 		NdCodeConvert  Convert("gb2312", "utf-8");
 		std::string cont = value["Content"].asString();
 		char ccont[128] = {0};
-		int ccont_length = 0;
+		//int ccont_length = 0;
 		Convert.convert((char *)cont.c_str(), cont.size(), ccont, sizeof(ccont));
 		std::printf("[%s][%d][%s]\n", __FUNCTION__, http.GetResponseCode(), ccont);
 	}
@@ -715,8 +729,8 @@ bool NdTask::t_WriteDiray(NdUserInfo* pUserInfo)
 
 	std::string today = NdCalculateUtil::getCurrentSystemTime();
 
-	//std::string content = "frmName=K7_frmRcPlan&action=save&txtArgs=9153B0DB2A6B8271¡ÓÕÅÐÂÖÞ¡Ó01023I0N02¡Ó¹¤³ÌÔº¼¼Êõ¿ª·¢²¿Ç°¶Ë¿ª·¢´¦¡Ó2015-10-27¡Ó1¡Ó0¡Ó0¡Ó0¡Ó¡Ó¡ÓY¡Ó1&mainData=¡Ó2015-10-27¡ÓÕý³£µ¥¾Ý¡Ó121416¡ÓÕÅÐÂÖÞ¡Ó¡Ó¡Ó8&logData=¡ìOR¡ìOR001¡ì01023I0N02¡ìwifiÏÂ×é²¥²âÊÔ¡ì8¡ì35¡ì50¡ì¡ì¡ì¡ì¡ì1¡ì&ajaxCache=1445932374145";
-	std::string tmp = "frmName=K7_frmRcPlan&action=save&txtArgs="+ content.m_Id +"¡Ó"+ content.m_realName + "¡Ó" + content.m_groupCode +"¡Ó" + content.m_groupName + "¡Ó"+ today +"¡Ó1¡Ó0¡Ó0¡Ó0¡Ó¡Ó¡ÓY¡Ó1&mainData=¡Ó"+today+"¡ÓÕý³£µ¥¾Ý¡Ó"+pUserInfo->m_uname+"¡Ó" + content.m_realName +"¡Ó¡Ó¡Ó8&logData=¡ì"+content.m_comCode+"¡ì"+content.m_depCode+"¡ì"+content.m_groupCode+"¡ì"+content.m_content+"¡ì8¡ì"+ content.m_completeRate+"¡ì50¡ì¡ì¡ì¡ì¡ì1¡ì&ajaxCache=" + NdCalculateUtil::getNowMilliSeconds();
+	//std::string content = "frmName=K7_frmRcPlan&action=save&txtArgs=9153B0DB2A6B8271Â¡Ã“Ã•Ã…ÃÃ‚Ã–ÃžÂ¡Ã“01023I0N02Â¡Ã“Â¹Â¤Â³ÃŒÃ”ÂºÂ¼Â¼ÃŠÃµÂ¿ÂªÂ·Â¢Â²Â¿Ã‡Â°Â¶Ã‹Â¿ÂªÂ·Â¢Â´Â¦Â¡Ã“2015-10-27Â¡Ã“1Â¡Ã“0Â¡Ã“0Â¡Ã“0Â¡Ã“Â¡Ã“Â¡Ã“YÂ¡Ã“1&mainData=Â¡Ã“2015-10-27Â¡Ã“Ã•Ã½Â³Â£ÂµÂ¥Â¾ÃÂ¡Ã“121416Â¡Ã“Ã•Ã…ÃÃ‚Ã–ÃžÂ¡Ã“Â¡Ã“Â¡Ã“8&logData=Â¡Ã¬ORÂ¡Ã¬OR001Â¡Ã¬01023I0N02Â¡Ã¬wifiÃÃ‚Ã—Ã©Â²Â¥Â²Ã¢ÃŠÃ”Â¡Ã¬8Â¡Ã¬35Â¡Ã¬50Â¡Ã¬Â¡Ã¬Â¡Ã¬Â¡Ã¬Â¡Ã¬1Â¡Ã¬&ajaxCache=1445932374145";
+	std::string tmp = "frmName=K7_frmRcPlan&action=save&txtArgs="+ content.m_Id +"Â¡Ã“"+ content.m_realName + "Â¡Ã“" + content.m_groupCode +"Â¡Ã“" + content.m_groupName + "Â¡Ã“"+ today +"Â¡Ã“1Â¡Ã“0Â¡Ã“0Â¡Ã“0Â¡Ã“Â¡Ã“Â¡Ã“YÂ¡Ã“1&mainData=Â¡Ã“"+today+"Â¡Ã“Ã•Ã½Â³Â£ÂµÂ¥Â¾ÃÂ¡Ã“"+pUserInfo->m_uname+"Â¡Ã“" + content.m_realName +"Â¡Ã“Â¡Ã“Â¡Ã“8&logData=Â¡Ã¬"+content.m_comCode+"Â¡Ã¬"+content.m_depCode+"Â¡Ã¬"+content.m_groupCode+"Â¡Ã¬"+content.m_content+"Â¡Ã¬8Â¡Ã¬"+ content.m_completeRate+"Â¡Ã¬50Â¡Ã¬Â¡Ã¬Â¡Ã¬Â¡Ã¬Â¡Ã¬1Â¡Ã¬&ajaxCache=" + NdCalculateUtil::getNowMilliSeconds();
 	http.SetPostFileds(tmp);
 
 	int nCode = http.ExecRequest();
